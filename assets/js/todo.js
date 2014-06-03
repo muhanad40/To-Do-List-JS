@@ -1,21 +1,122 @@
 $(document).ready(function() {
 
+	var ToDo = function() {
+		this.data = { tasksList: [
+			{'id': '9', 'status': 'incomplete', 'task': 'Do something today...'}
+		]};
+	}
+
+	// Refresh the state of the "Clear complete (#) button"
+	ToDo.prototype.refreshClearBtn = function() {
+		var total_incomplete = todo.countBy('status', 'complete');
+		var text = "Clear completed (" + total_incomplete + ")";
+		$("#clear-completed").hide();
+		if(total_incomplete)
+			$("#clear-completed").show().html(text);
+	}
+
+	ToDo.prototype.refreshItem = function(id) {
+		var item_data = {tasksList: [todo.findItem(id)]};
+		var item_template = $("#tasks-list-template").html();
+		var item_html = _.template(item_template, item_data);
+		item_html = $(item_html).find('li').html();
+		$('ul li#'+id).html(item_html);
+		todo.refreshCount();
+	}
+
+	ToDo.prototype.updateItem = function(id, type, value) {
+		var item_obj = todo.findItem(id);
+		item_obj[type] = value;
+		todo.refreshCount();
+	}
+
+	ToDo.prototype.getMaxOfArray = function(numArray) {
+		return Math.max.apply(null, numArray);
+	}
+
+	ToDo.prototype.updateItemStatusHTML = function(id, status) {
+		$("ul li#"+id).attr('class', status);
+	}
+
+	ToDo.prototype.addItem = function(item) {
+		var item_obj = {
+			'id': item.id,
+			'status': item.status,
+			'task': item.task
+		};
+		todo.data.tasksList.push(item_obj);
+		todo.addItemToList(item_obj);
+		todo.refreshCount();
+	}
+
+	ToDo.prototype.addItemToList = function(item_obj) {
+		var item_data = { tasksList: [
+			item_obj
+		]};
+		var item_template = $("#tasks-list-template").html();
+		var item_template = _.template(item_template, item_data);
+		var item_html = $(item_template).find('li')[0].outerHTML;
+		$(item_html).appendTo('#all-tasks-list ul').hide().fadeIn();
+	}
+
+	ToDo.prototype.removeItem = function(id) {
+		var item_obj = todo.findItem(id);
+		todo.data.tasksList = _.without(todo.data.tasksList, item_obj);
+		todo.refreshCount();
+	}
+
+	ToDo.prototype.removeItemFromList = function(id) {
+		$('ul#tasks-list li#'+id).remove();
+	}
+
+	ToDo.prototype.countBy = function(filter, value) {
+		var task_count = 0;
+		for (var i = 0; i < todo.data.tasksList.length; i++) {
+			if (todo.data.tasksList[i][filter] == value) {
+				task_count++;
+			}
+		}
+		return task_count;
+	}
+
+	ToDo.prototype.refreshCount = function() {
+		var total_incomplete = todo.countBy('status', 'incomplete');
+		var text = total_incomplete.toString();
+		text = text + " " + (total_incomplete == 0 || total_incomplete > 1 ? "tasks" : "task");
+		text = text + " left";
+		$("#tasks-left").html(text);
+	}
+
+	ToDo.prototype.findItem = function(id) {
+		for (var i = 0; i < todo.data.tasksList.length; i++) {
+			if (todo.data.tasksList[i]['id'] == id) {
+				return todo.data.tasksList[i];
+				break;
+			}
+		}
+	} 
+
+	ToDo.prototype.generateId = function() {
+		var new_id = todo.getMaxOfArray($.map(todo.data.tasksList, function(task){
+			return parseInt(task.id);
+		})) + 1;
+		return new_id;
+	}
+
+	var todo = new ToDo();
+
 	_.templateSettings = {
 		interpolate: /\#\#\=(.+?)\#\#/g,
 		evaluate: /\#\#(.+?)\#\#/g
 	};
 
-	var data = { tasksList: [
-		{'id': '9', 'status': 'incomplete', 'task': 'Do something today...'}
-	]};
-
 	// Refresh the total tasks left counter
-	refresh_count();
+	todo.refreshCount();
 
-	refresh_clear_btn();
+	todo.refreshClearBtn();
 
 	// Render the list
-	var list_html = _.template($("#tasks-list-template").html(), data);
+	var list_html = _.template($("#tasks-list-template").html(), todo.data);
 	$('#all-tasks-list').html(list_html);
 
 	$( "#tasks-list" ).sortable({
@@ -31,12 +132,12 @@ $(document).ready(function() {
 	$('#task-form input#add-btn').on('click', function(event){
 		event.preventDefault();
 		var task = {
-			id: generate_id(),
+			id: todo.generateId(),
 			task: $('#task-input').val(),
 			status: 'incomplete'
 		};
 		if(task.task !== '') {
-			add_item(task);
+			todo.addItem(task);
 			$('#task-form #task-input').val('');
 		}
 	});
@@ -57,9 +158,9 @@ $(document).ready(function() {
 			if(task_text !== '')
 			{
 				var id = $(this).parent().attr('id');
-				update_item(id, 'task', task_text);
+				todo.updateItem(id, 'task', task_text);
 			}
-			refresh_item(id);
+			todo.refreshItem(id);
 		}
 	});
 
@@ -68,17 +169,17 @@ $(document).ready(function() {
 		if(task_text !== '')
 		{
 			var id = $(this).parent().attr('id');
-			update_item(id, 'task', task_text);
+			todo.updateItem(id, 'task', task_text);
 		}
-		refresh_item(id);
+		todo.refreshItem(id);
 	});
 
 	// Remove task
 	$('#all-tasks-list').on('click', '#tasks-list .item-remove', function(){
 		var task_id = $(this).parent().attr('id');
-		remove_item(task_id);
-		remove_item_from_list(task_id);
-		refresh_clear_btn();
+		todo.removeItem(task_id);
+		todo.removeItemFromList(task_id);
+		todo.refreshClearBtn();
 	});
 
 	// Mark as complete/incomplete
@@ -87,117 +188,24 @@ $(document).ready(function() {
 		var checked = $(this).prop('checked');
 		var update_status = (checked===true) ? 'complete' : 'incomplete'
 
-		update_item(task_id, 'status', update_status);
-		update_item_status_html(task_id, update_status);
-		refresh_clear_btn();
+		todo.updateItem(task_id, 'status', update_status);
+		todo.updateItemStatusHTML(task_id, update_status);
+		todo.refreshClearBtn();
 	});
 
 	// Clear completed tasks
 	$("#clear-completed").on('click', function() {
-		_.each(data.tasksList, function(item_obj) {
+		_.each(todo.data.tasksList, function(item_obj) {
 			if(item_obj.status === 'complete') {
-				remove_item(item_obj.id);
-				remove_item_from_list(item_obj.id);
+				todo.removeItem(item_obj.id);
+				todo.removeItemFromList(item_obj.id);
 			}
 		});
-		refresh_clear_btn();
+		todo.refreshClearBtn();
 	});
 
-	// Refresh the state of the "Clear complete (#) button"
-	function refresh_clear_btn() {
-		var total_incomplete = count_by('status', 'complete');
-		var text = "Clear completed (" + total_incomplete + ")";
-		$("#clear-completed").hide();
-		if(total_incomplete)
-			$("#clear-completed").show().html(text);
-	}
+	
 
-	function refresh_item(id) {
-		var item_data = {tasksList: [find_item(id)]};
-		var item_template = $("#tasks-list-template").html();
-		var item_html = _.template(item_template, item_data);
-		item_html = $(item_html).find('li').html();
-		$('ul li#'+id).html(item_html);
-		refresh_count();
-	}
-
-	function update_item(id, type, value) {
-		var item_obj = find_item(id);
-		item_obj[type] = value;
-		refresh_count();
-	}
-
-	function getMaxOfArray(numArray) {
-		return Math.max.apply(null, numArray);
-	}
-
-	function update_item_status_html(id, status) {
-		$("ul li#"+id).attr('class', status);
-	}
-
-	function add_item(item) {
-		var item_obj = {
-			'id': item.id,
-			'status': item.status,
-			'task': item.task
-		};
-		data.tasksList.push(item_obj);
-		add_item_to_list(item_obj);
-		refresh_count();
-	}
-
-	function add_item_to_list(item_obj) {
-		var item_data = { tasksList: [
-			item_obj
-		]};
-		var item_template = $("#tasks-list-template").html();
-		var item_template = _.template(item_template, item_data);
-		var item_html = $(item_template).find('li')[0].outerHTML;
-		$(item_html).appendTo('#all-tasks-list ul').hide().fadeIn();
-	}
-
-	function remove_item(id) {
-		var item_obj = find_item(id);
-		data.tasksList = _.without(data.tasksList, item_obj);
-		refresh_count();
-	}
-
-	function remove_item_from_list(id) {
-		$('ul#tasks-list li#'+id).remove();
-	}
-
-	function count_by(filter, value) {
-		var task_count = 0;
-		for (var i = 0; i < data.tasksList.length; i++) {
-			if (data.tasksList[i][filter] == value) {
-				task_count++;
-			}
-		}
-		return task_count;
-	}
-
-	function refresh_count() {
-		var total_incomplete = count_by('status', 'incomplete');
-		var text = total_incomplete.toString();
-		text = text + " " + (total_incomplete == 0 || total_incomplete > 1 ? "tasks" : "task");
-		text = text + " left";
-		$("#tasks-left").html(text);
-	}
-
-	function find_item(id) {
-		for (var i = 0; i < data.tasksList.length; i++) {
-			if (data.tasksList[i]['id'] == id) {
-				return data.tasksList[i];
-				break;
-			}
-		}
-	} 
-
-	function generate_id() {
-		var new_id = getMaxOfArray($.map(data.tasksList, function(task){
-			return parseInt(task.id);
-		})) + 1;
-		return new_id;
-	}
+	
 	
 });
